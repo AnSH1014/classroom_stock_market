@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>교사 컨트롤 — 우리 반 주식시장</title>
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+KR:wght@300;400;500;700&display=swap');
+:root{--bg:#0a0e1a;--panel:#111827;--panel2:#1a2235;--border:#1e2d45;--up:#00e896;--down:#ff4466;--flat:#6b7a9a;--gold:#f5c842;--text:#e8edf8;--muted:#6b7a9a;--accent:#3b82f6}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-serif;min-height:100vh}
+body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.03) 2px,rgba(0,0,0,.03) 4px);pointer-events:none;z-index:1000}
+
+header{display:flex;align-items:center;justify-content:space-between;padding:14px 24px;background:var(--panel);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100}
+.logo{font-family:'Black Han Sans',sans-serif;font-size:20px;color:var(--gold);letter-spacing:2px}
+.logo span{color:var(--muted);font-size:12px;font-family:'Noto Sans KR',sans-serif;font-weight:300;margin-left:8px}
+.header-right{display:flex;align-items:center;gap:14px}
+#timer-big{font-family:'Black Han Sans',sans-serif;font-size:30px;color:var(--gold);letter-spacing:2px}
+#timer-big.urgent{color:var(--down);animation:pulse .5s ease infinite alternate}
+@keyframes pulse{from{opacity:1}to{opacity:.4}}
+
+.btn{padding:9px 20px;border-radius:8px;border:none;cursor:pointer;font-family:'Noto Sans KR',sans-serif;font-size:13px;font-weight:700;transition:all .15s}
+.btn:active{transform:scale(.96)}
+.btn-green{background:var(--up);color:#000}
+.btn-red{background:var(--down);color:#fff}
+.btn-gold{background:var(--gold);color:#000}
+.btn-gray{background:var(--panel2);color:var(--muted);border:1px solid var(--border)}
+
+.layout{display:grid;grid-template-columns:1fr 360px;height:calc(100vh - 57px)}
+
+/* LEFT: market overview */
+.left{padding:20px;overflow-y:auto;display:flex;flex-direction:column;gap:16px}
+
+.section-label{font-size:10px;font-weight:700;letter-spacing:3px;color:var(--muted);margin-bottom:8px}
+
+.stat-row{display:flex;gap:12px}
+.stat-card{flex:1;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center}
+.stat-val{font-family:'Black Han Sans',sans-serif;font-size:22px;color:var(--gold)}
+.stat-label{font-size:11px;color:var(--muted);margin-top:4px}
+
+.stock-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.stock-tile{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px;position:relative;overflow:hidden}
+.stock-tile::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--tile-color)}
+.tile-emoji{font-size:22px;margin-bottom:6px}
+.tile-name{font-size:12px;font-weight:700;margin-bottom:2px}
+.tile-price{font-family:'Black Han Sans',sans-serif;font-size:20px;margin-bottom:2px}
+.tile-change{font-size:11px;font-weight:700}
+.tile-change.up{color:var(--up)}.tile-change.down{color:var(--down)}.tile-change.flat{color:var(--muted)}
+.tile-spark{height:30px;width:100%;margin-top:6px}
+.tile-manual{display:flex;gap:4px;margin-top:8px}
+.tile-manual button{flex:1;padding:5px;border-radius:5px;border:none;cursor:pointer;font-size:11px;font-weight:700;font-family:'Noto Sans KR',sans-serif}
+.tile-up-btn{background:rgba(0,232,150,.15);color:var(--up);border:1px solid var(--up) !important}
+.tile-dn-btn{background:rgba(255,68,102,.15);color:var(--down);border:1px solid var(--down) !important}
+
+.news-display{background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:12px 16px;font-size:13px;min-height:44px;display:flex;align-items:center;gap:10px}
+.news-tag{background:var(--gold);color:#000;font-size:10px;font-weight:700;padding:3px 8px;border-radius:4px;white-space:nowrap}
+
+/* RIGHT: controls */
+.right{background:var(--panel);border-left:1px solid var(--border);padding:18px;overflow-y:auto;display:flex;flex-direction:column;gap:14px}
+
+.ctrl-section{border-bottom:1px solid var(--border);padding-bottom:14px}
+.ctrl-section:last-child{border-bottom:none}
+
+.timer-presets{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.preset-btn{padding:7px 14px;border-radius:6px;border:1px solid var(--border);background:var(--panel2);color:var(--muted);cursor:pointer;font-size:12px;font-weight:700;transition:all .15s;font-family:'Noto Sans KR',sans-serif}
+.preset-btn:hover{border-color:var(--accent);color:var(--text)}
+.preset-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+.speed-btns{display:flex;gap:6px;margin-top:6px}
+.speed-btn{flex:1;padding:8px;border-radius:6px;border:1px solid var(--border);background:var(--panel2);color:var(--muted);cursor:pointer;font-size:12px;font-weight:700;text-align:center;transition:all .15s;font-family:'Noto Sans KR',sans-serif}
+.speed-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+input[type=range]{accent-color:var(--gold);width:100%;margin-top:6px}
+
+.news-btn-list{display:flex;flex-direction:column;gap:6px;margin-top:6px;max-height:260px;overflow-y:auto}
+.news-event-btn{padding:9px 12px;border-radius:8px;border:1px solid var(--border);background:var(--panel2);color:var(--text);cursor:pointer;font-size:11px;text-align:left;transition:all .15s;font-family:'Noto Sans KR',sans-serif;line-height:1.5}
+.news-event-btn:hover{border-color:var(--gold);background:rgba(245,200,66,.08)}
+.news-event-btn:active{transform:scale(.98)}
+.ne-effect{display:block;font-size:10px;font-weight:700;letter-spacing:1px;margin-top:2px}
+.ne-effect.up{color:var(--up)}.ne-effect.down{color:var(--down)}.ne-effect.mixed{color:var(--gold)}
+
+.rank-item{display:flex;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);gap:8px;font-size:12px}
+.rank-num{font-weight:700;color:var(--muted);width:18px}
+.rank-num.g1{color:var(--gold)}.rank-num.g2{color:#a0aec0}.rank-num.g3{color:#b87333}
+.rank-name{flex:1;font-weight:700}
+.rank-asset{color:var(--up);font-weight:700}
+
+.dot{width:8px;height:8px;border-radius:50%;background:var(--down);display:inline-block;margin-right:6px}
+.dot.live{background:var(--up);animation:blink 1s ease infinite alternate}
+@keyframes blink{from{opacity:1}to{opacity:.3}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">🎛️ 교사 컨트롤 <span>TEACHER PANEL</span></div>
+  <div class="header-right">
+    <div style="font-size:12px;color:var(--muted)">
+      <span class="dot" id="dot"></span><span id="status-txt">대기 중</span>
+      &nbsp;|&nbsp; 학생 <strong id="student-count" style="color:var(--gold)">0</strong>명 접속
+    </div>
+    <div id="timer-big">--:--</div>
+    <button class="btn btn-green" id="main-btn" onclick="toggleGame()">▶ 시작</button>
+    <button class="btn btn-gray" onclick="doReset()">↺ 초기화</button>
+  </div>
+</header>
+
+<div class="layout">
+  <!-- LEFT -->
+  <div class="left">
+    <div>
+      <div class="section-label">접속 현황</div>
+      <div class="stat-row">
+        <div class="stat-card"><div class="stat-val" id="s-students">0</div><div class="stat-label">접속 학생</div></div>
+        <div class="stat-card"><div class="stat-val" id="s-trades">0</div><div class="stat-label">총 거래 건수</div></div>
+        <div class="stat-card"><div class="stat-val" id="s-avg">—</div><div class="stat-label">평균 자산</div></div>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-label">실시간 시세</div>
+      <div class="stock-grid" id="stock-grid"></div>
+    </div>
+
+    <div>
+      <div class="section-label">최신 뉴스</div>
+      <div class="news-display"><span class="news-tag">📰</span><span id="news-txt">시장 개장을 기다리고 있습니다...</span></div>
+    </div>
+
+    <div>
+      <div class="section-label">🏆 실시간 순위</div>
+      <div id="rank-list"><div style="color:var(--muted);font-size:12px">게임 시작 후 표시됩니다</div></div>
+    </div>
+  </div>
+
+  <!-- RIGHT -->
+  <div class="right">
+
+    <div class="ctrl-section">
+      <div class="section-label">⏱ 타이머 설정</div>
+      <div class="timer-presets">
+        <button class="preset-btn active" id="pt-5" onclick="setTimer(5)">5분</button>
+        <button class="preset-btn" id="pt-10" onclick="setTimer(10)">10분</button>
+        <button class="preset-btn" id="pt-15" onclick="setTimer(15)">15분</button>
+        <button class="preset-btn" id="pt-20" onclick="setTimer(20)">20분</button>
+      </div>
+    </div>
+
+    <div class="ctrl-section">
+      <div class="section-label">⚡ 시세 변동 속도</div>
+      <div class="speed-btns">
+        <button class="speed-btn" onclick="setSpeed(1)">느림</button>
+        <button class="speed-btn active" id="sp2" onclick="setSpeed(2)">보통</button>
+        <button class="speed-btn" onclick="setSpeed(3)">빠름</button>
+        <button class="speed-btn" onclick="setSpeed(4)">폭등락</button>
+      </div>
+    </div>
+
+    <div class="ctrl-section">
+      <div class="section-label">📊 변동폭</div>
+      <input type="range" min="1" max="5" value="2" id="vol-slider" oninput="setVol(this.value)">
+      <div style="font-size:11px;color:var(--muted);margin-top:3px">변동폭: <span id="vol-label">보통</span></div>
+    </div>
+
+    <div class="ctrl-section">
+      <div class="section-label">📰 뉴스 이벤트</div>
+      <div class="news-btn-list" id="news-btn-list"></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const socket = io();
+socket.emit('teacher_join');
+
+const NEWS_EVENTS = [
+  { text:'🍎 사과 풍년! 공급 폭증으로 사과 가격 급락', targets:['apple'], effect:-0.25, label:'사과 -25%', cls:'down' },
+  { text:'☕ 커피 수출 금지령 발동! 희귀해진 커피 주식 급등', targets:['coffee'], effect:0.3, label:'커피 +30%', cls:'up' },
+  { text:'🎮 신작 게임 대박! 게임천국 역대 최고 매출', targets:['game'], effect:0.35, label:'게임 +35%', cls:'up' },
+  { text:'🚌 스쿨버스 파업 예고... 투자자 우려 급증', targets:['bus'], effect:-0.2, label:'버스 -20%', cls:'down' },
+  { text:'🍕 밀가루 가격 폭등! 피자마을 수익 악화', targets:['pizza'], effect:-0.2, label:'피자 -20%', cls:'down' },
+  { text:'📚 독서 열풍! 전국민 독서 캠페인으로 책나라 급등', targets:['book'], effect:0.4, label:'책나라 +40%', cls:'up' },
+  { text:'📉 경기 침체 우려... 전 종목 동반 하락세', targets:['apple','coffee','game','bus','pizza','book'], effect:-0.15, label:'전체 -15%', cls:'down' },
+  { text:'🎉 정부 경기부양책 발표! 시장 전반 급등', targets:['apple','coffee','game','bus','pizza','book'], effect:0.15, label:'전체 +15%', cls:'up' },
+  { text:'🍎☕ 사과-커피 합병 소식! 두 종목 동반 급등', targets:['apple','coffee'], effect:0.2, label:'사과·커피 +20%', cls:'up' },
+  { text:'🎮📚 게임과 책의 콜라보! 두 종목 동반 급등', targets:['game','book'], effect:0.25, label:'게임·책 +25%', cls:'up' },
+  { text:'⚡ 번개 폭풍! 예측 불가 시장 대혼돈', targets:[], effect:0, label:'랜덤 혼돈', cls:'mixed', random:true },
+];
+
+let stocks = [];
+let running = false;
+let tradeCount = 0;
+
+// Render news buttons
+document.getElementById('news-btn-list').innerHTML = NEWS_EVENTS.map((n,i) =>
+  `<button class="news-event-btn" onclick="sendNews(${i})">${n.text}<span class="ne-effect ${n.cls}">${n.label}</span></button>`
+).join('');
+
+socket.on('teacher_state', (data) => {
+  if (data.stocks) {
+    stocks = data.stocks.map(s => ({...s, history:[s.price], prevPrice:s.price}));
+    renderGrid();
+  }
+  if (data.studentCount !== undefined) updateStudentCount(data.studentCount);
+  if (data.gameState) {
+    running = data.gameState.running;
+    updateMainBtn();
+  }
+});
+
+socket.on('student_count', (n) => updateStudentCount(n));
+
+socket.on('prices', (updates) => {
+  updates.forEach(u => {
+    const s = stocks.find(s => s.id === u.id);
+    if (s) { s.prevPrice = s.price; s.price = u.price; s.history = u.history; }
+  });
+  renderGrid();
+  tradeCount++;
+  document.getElementById('s-trades').textContent = tradeCount;
+});
+
+socket.on('timer', (t) => updateTimerDisplay(t));
+
+socket.on('news', (text) => {
+  document.getElementById('news-txt').textContent = text;
+});
+
+socket.on('leaderboard', (lb) => {
+  renderLeaderboard(lb);
+  if (lb.length) {
+    const avg = Math.round(lb.reduce((a,b)=>a+b.asset,0)/lb.length);
+    document.getElementById('s-avg').textContent = avg.toLocaleString();
+  }
+});
+
+socket.on('game_started', () => { running = true; updateMainBtn(); setStatusLive(); });
+socket.on('game_paused', () => { running = false; updateMainBtn(); setStatusPaused(); });
+socket.on('game_ended', () => { running = false; updateMainBtn(); setStatusEnded(); });
+socket.on('game_reset', (data) => {
+  running = false;
+  tradeCount = 0;
+  stocks.forEach(s => {
+    const u = data.stocks.find(u=>u.id===s.id);
+    if(u){ s.price=u.price; s.history=u.history; s.prevPrice=u.price; }
+  });
+  renderGrid();
+  document.getElementById('s-trades').textContent = '0';
+  document.getElementById('s-avg').textContent = '—';
+  document.getElementById('news-txt').textContent = '시장 개장을 기다리고 있습니다...';
+  updateMainBtn();
+  updateTimerDisplay(data.gameState.timeLeft);
+  document.getElementById('dot').className='dot';
+  document.getElementById('status-txt').textContent='대기 중';
+});
+
+function renderGrid() {
+  if (!stocks.length) return;
+  document.getElementById('stock-grid').innerHTML = stocks.map(s => {
+    const prev = s.prevPrice || s.price;
+    const diff = s.price - prev;
+    const pct = ((diff/prev)*100).toFixed(1);
+    let cls='flat', chTxt='—';
+    if(diff>0){cls='up';chTxt=`▲ +${pct}%`}
+    else if(diff<0){cls='down';chTxt=`▼ ${pct}%`}
+    const spark = sparkSvg(s.history||[s.price], diff>=0);
+    return `<div class="stock-tile" style="--tile-color:${s.color||'#6b7a9a'}">
+      <div class="tile-emoji">${s.emoji}</div>
+      <div class="tile-name">${s.name}</div>
+      <div class="tile-price" style="color:${s.color||'var(--text)'}">${s.price.toLocaleString()}원</div>
+      <div class="tile-change ${cls}">${chTxt}</div>
+      <div class="tile-spark">${spark}</div>
+      <div class="tile-manual">
+        <button class="tile-dn-btn" onclick="manualChange('${s.id}',-0.1)">▼10%</button>
+        <button class="tile-up-btn" onclick="manualChange('${s.id}',0.1)">▲10%</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function sparkSvg(history, isUp) {
+  const h = (history||[]).slice(-40);
+  if(h.length<2) return `<svg viewBox="0 0 100 30" preserveAspectRatio="none"></svg>`;
+  const min=Math.min(...h),max=Math.max(...h),range=max-min||1;
+  const pts=h.map((v,i)=>`${(i/(h.length-1))*100},${30-((v-min)/range)*26-2}`).join(' ');
+  const c=isUp?'#00e896':'#ff4466';
+  return `<svg viewBox="0 0 100 30" preserveAspectRatio="none"><polyline points="${pts}" fill="none" stroke="${c}" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
+}
+
+function renderLeaderboard(lb) {
+  const numCls=['g1','g2','g3'];
+  document.getElementById('rank-list').innerHTML = lb.map((item,i)=>`
+    <div class="rank-item">
+      <span class="rank-num ${numCls[i]||''}">${i+1}</span>
+      <span class="rank-name">${item.name}</span>
+      <span class="rank-asset">${item.asset.toLocaleString()}원</span>
+    </div>
+  `).join('') || '<div style="color:var(--muted);font-size:12px">아직 참가자 없음</div>';
+  document.getElementById('s-students').textContent = lb.length;
+}
+
+function updateStudentCount(n) {
+  document.getElementById('student-count').textContent = n;
+  document.getElementById('s-students').textContent = n;
+}
+
+function updateTimerDisplay(t) {
+  const m=Math.floor(t/60).toString().padStart(2,'0');
+  const s=(t%60).toString().padStart(2,'0');
+  const el=document.getElementById('timer-big');
+  el.textContent=`${m}:${s}`;
+  el.className=t<=30&&t>0?'urgent':'';
+}
+
+let gamePhase = 'idle'; // idle | running | paused
+function toggleGame() {
+  if (!running) {
+    if (gamePhase === 'paused') socket.emit('teacher_resume');
+    else socket.emit('teacher_start');
+    gamePhase = 'running';
+  } else {
+    socket.emit('teacher_pause');
+    gamePhase = 'paused';
+  }
+}
+
+function updateMainBtn() {
+  const btn = document.getElementById('main-btn');
+  if (running) { btn.textContent='⏸ 일시정지'; btn.className='btn btn-red'; }
+  else { btn.textContent='▶ 시작'; btn.className='btn btn-green'; }
+}
+
+function setStatusLive() {
+  document.getElementById('dot').className='dot live';
+  document.getElementById('status-txt').textContent='거래 중';
+}
+function setStatusPaused() {
+  document.getElementById('dot').className='dot';
+  document.getElementById('status-txt').textContent='일시정지';
+}
+function setStatusEnded() {
+  document.getElementById('dot').className='dot';
+  document.getElementById('status-txt').textContent='거래 종료';
+}
+
+function setTimer(min) {
+  if (running) return;
+  socket.emit('teacher_set_timer', min);
+  document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('pt-'+min)?.classList.add('active');
+}
+
+function setSpeed(s) {
+  socket.emit('teacher_speed', s);
+  document.querySelectorAll('.speed-btn').forEach((b,i)=>b.classList.toggle('active',i===s-1));
+}
+
+function setVol(v) {
+  socket.emit('teacher_vol', parseInt(v));
+  const labels=['','매우 낮음','낮음','보통','높음','매우 높음'];
+  document.getElementById('vol-label').textContent=labels[v]||'보통';
+}
+
+function sendNews(idx) {
+  const n = NEWS_EVENTS[idx];
+  socket.emit('teacher_news', { text:n.text, targets:n.targets, effect:n.effect, random:!!n.random });
+}
+
+function manualChange(stockId, pct) {
+  socket.emit('teacher_manual', { stockId, pct });
+}
+
+function doReset() {
+  if (!confirm('정말 초기화할까요? 모든 학생 자산이 3,000원으로 돌아갑니다.')) return;
+  gamePhase = 'idle';
+  socket.emit('teacher_reset');
+}
+</script>
+</body>
+</html>
