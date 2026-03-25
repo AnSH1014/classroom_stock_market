@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>🎛️ 교사 컨트롤 — 불장 교실</title>
+<title>🎛️ 교사 컨트롤 — 주식왕 교실</title>
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+KR:wght@300;400;500;700&display=swap');
@@ -94,7 +94,7 @@ input[type=range]{accent-color:var(--gold);width:100%;margin-top:6px}
 <body>
 
 <header>
-  <div class="logo">🎛️ 불장 교실 <span>TEACHER PANEL</span></div>
+  <div class="logo">🎛️ 주식왕 교실 <span>TEACHER PANEL</span></div>
   <div class="header-right">
     <div style="font-size:12px;color:var(--muted)">
       <span class="dot" id="dot"></span><span id="status-txt">대기 중</span>
@@ -285,26 +285,25 @@ function sparkSvg(history, initialPrice) {
   if(h.length<2) return `<svg viewBox="0 0 240 80" preserveAspectRatio="none"></svg>`;
   const W=240, H=80, pad=6;
   const startVal = initialPrice || h[0];
-  const allVals = [startVal, ...h];
-  const min = Math.min(...allVals)*0.995;
-  const max = Math.max(...allVals)*1.005;
-  const range = max-min||1;
+  const fixedRange = startVal * 0.35;
+  const min = Math.min(startVal - fixedRange, ...h) * 0.998;
+  const max = Math.max(startVal + fixedRange, ...h) * 1.002;
+  const range = max - min || 1;
   const toY = v => H - ((v-min)/range)*(H-pad*2) - pad;
   const baseY = toY(startVal);
   const pts = h.map((v,i)=>`${(i/(h.length-1||1))*W},${toY(v)}`).join(' ');
   const c = h[h.length-1] >= startVal ? '#00e896' : '#ff4466';
-  const fillPts = `0,${baseY} ${pts} ${W},${baseY}`;
-  const gridLines = [0.2, 0.5, 0.8].map(r => {
-    const gv = min + range*(1-r);
-    const gy = toY(gv);
-    return `<line x1="0" y1="${gy}" x2="${W}" y2="${gy}" stroke="rgba(255,255,255,0.06)" stroke-width="0.5"/>
-            <text x="2" y="${gy-2}" font-size="7" fill="rgba(255,255,255,0.25)" font-family="sans-serif">${Math.round(gv).toLocaleString()}</text>`;
+  const gridVals = [startVal*1.2, startVal, startVal*0.8];
+  const gridLines = gridVals.map(gv => {
+    const gy = toY(gv); if(gy<2||gy>H-2) return '';
+    const isBase = gv===startVal;
+    return `<line x1="0" y1="${gy}" x2="${W}" y2="${gy}" stroke="${isBase?c:'rgba(255,255,255,0.06)'}" stroke-width="0.5" stroke-dasharray="${isBase?'3 3':'0'}" opacity="${isBase?0.6:1}"/>
+    <text x="2" y="${gy-2}" font-size="7" fill="${isBase?c:'rgba(255,255,255,0.25)'}" font-family="sans-serif">${Math.round(gv).toLocaleString()}</text>`;
   }).join('');
   const lastY = toY(h[h.length-1]);
   return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="overflow:hidden">
     ${gridLines}
-    <line x1="0" y1="${baseY}" x2="${W}" y2="${baseY}" stroke="${c}" stroke-width="0.5" stroke-dasharray="3 3" opacity="0.5"/>
-    <polygon points="${fillPts}" fill="${c}" opacity="0.07"/>
+    <polygon points="0,${baseY} ${pts} ${W},${baseY}" fill="${c}" opacity="0.08"/>
     <polyline points="${pts}" fill="none" stroke="${c}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>
     <circle cx="${W}" cy="${lastY}" r="2.5" fill="${c}"/>
   </svg>`;

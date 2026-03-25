@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>🔥 불장 교실</title>
+<title>📈 주식왕 교실</title>
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+KR:wght@300;400;500;700&display=swap');
@@ -65,7 +65,7 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-seri
 .held-badge{font-size:11px;color:var(--muted);background:var(--panel2);padding:3px 8px;border-radius:20px;display:inline-block}
 .held-badge.has{color:var(--gold);border:1px solid rgba(245,200,66,.3)}
 
-.spark-wrap{padding:0 14px 8px;height:64px;overflow:hidden}
+.spark-wrap{padding:0 14px 10px;height:110px;overflow:hidden}
 .spark-wrap svg{width:100%;height:100%;display:block}
 
 .trade-row{display:flex;align-items:center;border-top:1px solid var(--border);overflow:hidden}
@@ -122,7 +122,7 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-seri
 <body>
 
 <div id="join-screen">
-  <div class="join-logo">🔥 불장 교실<small>CLASSROOM STOCK EXCHANGE</small></div>
+  <div class="join-logo">📈 주식왕 교실<small>CLASSROOM STOCK EXCHANGE</small></div>
   <div class="join-card">
     <div style="font-size:13px;color:var(--muted);text-align:center">이름을 입력하고 입장하세요!</div>
     <input class="join-input" id="name-input" placeholder="홍길동" maxlength="8" autofocus>
@@ -353,26 +353,47 @@ function renderStocks() {
 
 function sparkSvg(history, initialPrice) {
   const h = history||[];
-  if(h.length<2) return '<svg viewBox="0 0 240 64" preserveAspectRatio="none"></svg>';
-  const W=240,H=64,pad=5;
-  const startVal = initialPrice||h[0];
-  const allVals = [startVal,...h];
-  const min=Math.min(...allVals)*0.995, max=Math.max(...allVals)*1.005, range=max-min||1;
-  const toY = v => H-((v-min)/range)*(H-pad*2)-pad;
-  const baseY=toY(startVal);
-  const pts=h.map((v,i)=>`${(i/(h.length-1||1))*W},${toY(v)}`).join(' ');
-  const c=h[h.length-1]>=startVal?'#00e896':'#ff4466';
-  const gridLines=[0.2,0.5,0.8].map(r=>{
-    const gv=min+range*(1-r),gy=toY(gv);
-    return `<line x1="0" y1="${gy}" x2="${W}" y2="${gy}" stroke="rgba(255,255,255,0.07)" stroke-width="0.5"/>
-    <text x="3" y="${gy-2}" font-size="8" fill="rgba(255,255,255,0.3)" font-family="sans-serif">${Math.round(gv).toLocaleString()}</text>`;
+  if(h.length<2) return '<svg viewBox="0 0 240 100" preserveAspectRatio="none"></svg>';
+  const W=240, H=100, pad=8;
+  const startVal = initialPrice || h[0];
+
+  // ✅ y축을 initialPrice 기준 ±35% 고정 → 시작점이 절대 안 움직임
+  // 실제 데이터가 범위를 벗어나면 그쪽만 살짝 확장
+  const fixedRange = startVal * 0.35;
+  const rawMin = startVal - fixedRange;
+  const rawMax = startVal + fixedRange;
+  const actualMin = Math.min(rawMin, ...h);
+  const actualMax = Math.max(rawMax, ...h);
+  const min = actualMin * 0.998;
+  const max = actualMax * 1.002;
+  const range = max - min || 1;
+
+  const toY = v => H - ((v - min) / range) * (H - pad*2) - pad;
+  const baseY = toY(startVal); // 항상 고정!
+
+  const pts = h.map((v,i) => `${(i/(h.length-1||1))*W},${toY(v)}`).join(' ');
+  const c = h[h.length-1] >= startVal ? '#00e896' : '#ff4466';
+
+  // 눈금: 시작가 기준 위아래 고정값으로 표시
+  const gridVals = [startVal * 1.2, startVal, startVal * 0.8];
+  const gridLines = gridVals.map(gv => {
+    const gy = toY(gv);
+    if(gy < 2 || gy > H-2) return '';
+    const isBase = gv === startVal;
+    return `<line x1="0" y1="${gy}" x2="${W}" y2="${gy}"
+      stroke="${isBase ? c : 'rgba(255,255,255,0.06)'}"
+      stroke-width="${isBase ? 0.5 : 0.5}"
+      stroke-dasharray="${isBase ? '3 3' : '0'}" opacity="${isBase ? 0.6 : 1}"/>
+    <text x="3" y="${gy-2}" font-size="8"
+      fill="${isBase ? c : 'rgba(255,255,255,0.25)'}"
+      font-family="sans-serif" opacity="${isBase ? 0.8 : 1}">${Math.round(gv).toLocaleString()}</text>`;
   }).join('');
+
   return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="overflow:hidden">
     ${gridLines}
-    <line x1="0" y1="${baseY}" x2="${W}" y2="${baseY}" stroke="${c}" stroke-width="0.5" stroke-dasharray="3 3" opacity="0.5"/>
-    <polygon points="0,${baseY} ${pts} ${W},${baseY}" fill="${c}" opacity="0.08"/>
-    <polyline points="${pts}" fill="none" stroke="${c}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>
-    <circle cx="${W}" cy="${toY(h[h.length-1])}" r="2.5" fill="${c}"/>
+    <polygon points="0,${baseY} ${pts} ${W},${baseY}" fill="${c}" opacity="0.09"/>
+    <polyline points="${pts}" fill="none" stroke="${c}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+    <circle cx="${W}" cy="${toY(h[h.length-1])}" r="3" fill="${c}"/>
   </svg>`;
 }
 
