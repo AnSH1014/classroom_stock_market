@@ -17,12 +17,12 @@ app.get('/teacher', (req, res) => {
 const INITIAL_CASH = 3000;
 
 const STOCKS = [
-  { id:'apple',  emoji:'🍎', name:'사과농장',  code:'APPL', price:500,  color:'#00e896', history:[500]  },
-  { id:'coffee', emoji:'☕', name:'커피왕국',  code:'CAFE', price:800,  color:'#f5c842', history:[800]  },
-  { id:'game',   emoji:'🎮', name:'게임천국',  code:'GAME', price:600,  color:'#3b82f6', history:[600]  },
-  { id:'bus',    emoji:'🚌', name:'스쿨버스',  code:'BUS',  price:400,  color:'#a855f7', history:[400]  },
-  { id:'pizza',  emoji:'🍕', name:'피자마을',  code:'PIZA', price:1000, color:'#f97316', history:[1000] },
-  { id:'book',   emoji:'📚', name:'책나라',    code:'BOOK', price:300,  color:'#06b6d4', history:[300]  },
+  { id:'apple',  emoji:'🍎', name:'사과농장',  code:'APPL', price:500,  initialPrice:500,  color:'#00e896', history:[500]  },
+  { id:'coffee', emoji:'☕', name:'커피왕국',  code:'CAFE', price:800,  initialPrice:800,  color:'#f5c842', history:[800]  },
+  { id:'game',   emoji:'🎮', name:'게임천국',  code:'GAME', price:600,  initialPrice:600,  color:'#3b82f6', history:[600]  },
+  { id:'bus',    emoji:'🚌', name:'스쿨버스',  code:'BUS',  price:400,  initialPrice:400,  color:'#a855f7', history:[400]  },
+  { id:'pizza',  emoji:'🍕', name:'피자마을',  code:'PIZA', price:1000, initialPrice:1000, color:'#f97316', history:[1000] },
+  { id:'book',   emoji:'📚', name:'책나라',    code:'BOOK', price:300,  initialPrice:300,  color:'#06b6d4', history:[300]  },
 ];
 
 const INITIAL_PRICES = { apple:500, coffee:800, game:600, bus:400, pizza:1000, book:300 };
@@ -53,7 +53,7 @@ function tick() {
     s.history.push(s.price);
     if (s.history.length > 300) s.history.shift();
   });
-  io.emit('prices', STOCKS.map(s => ({ id:s.id, price:s.price, history:s.history })));
+  io.emit('prices', STOCKS.map(s => ({ id:s.id, price:s.price, history:s.history, initialPrice:s.initialPrice })));
   broadcastLeaderboard();
 }
 
@@ -115,7 +115,7 @@ io.on('connection', (socket) => {
     socket.emit('joined', {
       name: students[socket.id].name,
       cash: INITIAL_CASH,
-      stocks: STOCKS.map(s => ({ id:s.id, emoji:s.emoji, name:s.name, code:s.code, color:s.color, price:s.price, history:s.history })),
+      stocks: STOCKS.map(s => ({ id:s.id, emoji:s.emoji, name:s.name, code:s.code, color:s.color, price:s.price, history:s.history, initialPrice:s.initialPrice })),
       gameState,
     });
     broadcastLeaderboard();
@@ -235,7 +235,7 @@ io.on('connection', (socket) => {
         }
       });
     }
-    io.emit('prices', STOCKS.map(s => ({ id:s.id, price:s.price, history:s.history })));
+    io.emit('prices', STOCKS.map(s => ({ id:s.id, price:s.price, history:s.history, initialPrice:s.initialPrice })));
     broadcastLeaderboard();
   });
 
@@ -245,7 +245,7 @@ io.on('connection', (socket) => {
     if (!s) return;
     s.price = Math.max(50, Math.round(s.price * (1 + pct)));
     s.history.push(s.price);
-    io.emit('prices', STOCKS.map(s => ({ id:s.id, price:s.price, history:s.history })));
+    io.emit('prices', STOCKS.map(s => ({ id:s.id, price:s.price, history:s.history, initialPrice:s.initialPrice })));
     broadcastLeaderboard();
   });
 
@@ -265,7 +265,7 @@ io.on('connection', (socket) => {
       students[id].holdings = {};
     });
     io.emit('game_reset', {
-      stocks: STOCKS.map(s => ({ id:s.id, price:s.price, history:s.history })),
+      stocks: STOCKS.map(s => ({ id:s.id, price:s.price, history:s.history, initialPrice:s.initialPrice })),
       cash: INITIAL_CASH,
       gameState,
     });

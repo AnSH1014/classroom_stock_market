@@ -200,7 +200,7 @@ document.getElementById('news-btn-list').innerHTML = NEWS_EVENTS.map((n,i) =>
 
 socket.on('teacher_state', (data) => {
   if (data.stocks) {
-    stocks = data.stocks.map(s => ({...s, history:[s.price], prevPrice:s.price}));
+    stocks = data.stocks.map(s => ({...s, history:[s.price], prevPrice:s.price, initialPrice:s.initialPrice||s.price}));
     renderGrid();
   }
   if (data.studentCount !== undefined) updateStudentCount(data.studentCount);
@@ -215,7 +215,7 @@ socket.on('student_count', (n) => updateStudentCount(n));
 socket.on('prices', (updates) => {
   updates.forEach(u => {
     const s = stocks.find(s => s.id === u.id);
-    if (s) { s.prevPrice = s.price; s.price = u.price; s.history = u.history; }
+    if (s) { s.prevPrice = s.price; s.price = u.price; s.history = u.history; if(u.initialPrice) s.initialPrice = u.initialPrice; }
   });
   renderGrid();
   tradeCount++;
@@ -265,7 +265,7 @@ function renderGrid() {
     let cls='flat', chTxt='—';
     if(diff>0){cls='up';chTxt=`▲ +${pct}%`}
     else if(diff<0){cls='down';chTxt=`▼ ${pct}%`}
-    const spark = sparkSvg(s.history||[s.price], diff>=0);
+    const spark = sparkSvg(s.history||[s.price], s.initialPrice||s.price);
     return `<div class="stock-tile" style="--tile-color:${s.color||'#6b7a9a'}">
       <div class="tile-emoji">${s.emoji}</div>
       <div class="tile-name">${s.name}</div>
@@ -280,36 +280,33 @@ function renderGrid() {
   }).join('');
 }
 
-function sparkSvg(history, isUp) {
+function sparkSvg(history, initialPrice) {
   const h = history||[];
   if(h.length<2) return `<svg viewBox="0 0 240 80" preserveAspectRatio="none"></svg>`;
   const W=240, H=80, pad=6;
-  const startVal = h[0];
+  const startVal = initialPrice || h[0];
   const allVals = [startVal, ...h];
   const min = Math.min(...allVals)*0.995;
   const max = Math.max(...allVals)*1.005;
   const range = max-min||1;
   const toY = v => H - ((v-min)/range)*(H-pad*2) - pad;
   const baseY = toY(startVal);
-  const pts = h.map((v,i)=>`${(i/(h.length-1))*W},${toY(v)}`).join(' ');
+  const pts = h.map((v,i)=>`${(i/(h.length-1||1))*W},${toY(v)}`).join(' ');
   const c = h[h.length-1] >= startVal ? '#00e896' : '#ff4466';
   const fillPts = `0,${baseY} ${pts} ${W},${baseY}`;
-  // 눈금선 3개 (상단/중간/하단)
   const gridLines = [0.2, 0.5, 0.8].map(r => {
     const gv = min + range*(1-r);
     const gy = toY(gv);
-    const label = Math.round(gv).toLocaleString();
     return `<line x1="0" y1="${gy}" x2="${W}" y2="${gy}" stroke="rgba(255,255,255,0.06)" stroke-width="0.5"/>
-            <text x="2" y="${gy-2}" font-size="7" fill="rgba(255,255,255,0.25)" font-family="sans-serif">${label}</text>`;
+            <text x="2" y="${gy-2}" font-size="7" fill="rgba(255,255,255,0.25)" font-family="sans-serif">${Math.round(gv).toLocaleString()}</text>`;
   }).join('');
-  const lastX = W;
   const lastY = toY(h[h.length-1]);
   return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="overflow:hidden">
     ${gridLines}
     <line x1="0" y1="${baseY}" x2="${W}" y2="${baseY}" stroke="${c}" stroke-width="0.5" stroke-dasharray="3 3" opacity="0.5"/>
     <polygon points="${fillPts}" fill="${c}" opacity="0.07"/>
     <polyline points="${pts}" fill="none" stroke="${c}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>
-    <circle cx="${lastX}" cy="${lastY}" r="2.5" fill="${c}"/>
+    <circle cx="${W}" cy="${lastY}" r="2.5" fill="${c}"/>
   </svg>`;
 }
 

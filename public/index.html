@@ -325,7 +325,7 @@ function renderStocks() {
     if (diff>0){ chClass='up'; chText=`▲ +${diff}원 (+${pct}%)` }
     else if (diff<0){ chClass='down'; chText=`▼ ${diff}원 (${pct}%)` }
 
-    const spark = sparkSvg(s.history, diff>=0);
+    const spark = sparkSvg(s.history, s.initialPrice);
 
     return `<div class="stock-item" id="si-${s.id}">
       <div class="stock-main">
@@ -358,30 +358,31 @@ function renderStocks() {
   }).join('');
 }
 
-function sparkSvg(history, isUp) {
+function sparkSvg(history, initialPrice) {
   const h = history||[];
-  if (h.length < 2) return '<svg viewBox="0 0 240 60" preserveAspectRatio="none"></svg>';
-  const W=240, H=60, pad=4;
-  const startVal = h[0]; // 시작가 고정
+  if (h.length < 2) return '<svg viewBox="0 0 240 64" preserveAspectRatio="none"></svg>';
+  const W=240, H=64, pad=5;
+  const startVal = initialPrice || h[0];
   const allVals = [startVal, ...h];
-  const min = Math.min(...allVals) * 0.995;
-  const max = Math.max(...allVals) * 1.005;
-  const range = max - min || 1;
-  // 시작가 기준선 y
-  const baseY = H - ((startVal - min) / range) * (H - pad*2) - pad;
-  // 현재까지 찍힌 점들 (왼쪽 고정, 오른쪽으로 확장)
-  const pts = h.map((v,i) => {
-    const x = (i / (h.length - 1)) * W;
-    const y = H - ((v - min) / range) * (H - pad*2) - pad;
-    return `${x},${y}`;
-  }).join(' ');
+  const min = Math.min(...allVals)*0.995;
+  const max = Math.max(...allVals)*1.005;
+  const range = max-min||1;
+  const toY = v => H - ((v-min)/range)*(H-pad*2) - pad;
+  const baseY = toY(startVal);
+  const pts = h.map((v,i)=>`${(i/(h.length-1||1))*W},${toY(v)}`).join(' ');
   const c = h[h.length-1] >= startVal ? '#00e896' : '#ff4466';
   const fillPts = `0,${baseY} ${pts} ${W},${baseY}`;
-  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+  const gridLines = [0.2,0.5,0.8].map(r=>{
+    const gv=min+range*(1-r), gy=toY(gv);
+    return `<line x1="0" y1="${gy}" x2="${W}" y2="${gy}" stroke="rgba(255,255,255,0.07)" stroke-width="0.5"/>
+            <text x="3" y="${gy-2}" font-size="8" fill="rgba(255,255,255,0.3)" font-family="sans-serif">${Math.round(gv).toLocaleString()}</text>`;
+  }).join('');
+  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="overflow:hidden">
+    ${gridLines}
+    <line x1="0" y1="${baseY}" x2="${W}" y2="${baseY}" stroke="${c}" stroke-width="0.5" stroke-dasharray="3 3" opacity="0.5"/>
     <polygon points="${fillPts}" fill="${c}" opacity="0.08"/>
-    <line x1="0" y1="${baseY}" x2="${W}" y2="${baseY}" stroke="${c}" stroke-width="0.5" stroke-dasharray="3 3" opacity="0.4"/>
     <polyline points="${pts}" fill="none" stroke="${c}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>
-    <circle cx="${(h.length-1)/(h.length-1)*W}" cy="${H - ((h[h.length-1]-min)/range)*(H-pad*2)-pad}" r="2.5" fill="${c}"/>
+    <circle cx="${W}" cy="${toY(h[h.length-1])}" r="2.5" fill="${c}"/>
   </svg>`;
 }
 
