@@ -51,7 +51,7 @@ function tick() {
     const change = (Math.random() - 0.48) * volFactor;
     s.price = Math.max(50, Math.round(s.price * (1 + change)));
     s.history.push(s.price);
-    if (s.history.length > 80) s.history.shift();
+    if (s.history.length > 300) s.history.shift();
   });
   io.emit('prices', STOCKS.map(s => ({ id:s.id, price:s.price, history:s.history })));
   broadcastLeaderboard();
